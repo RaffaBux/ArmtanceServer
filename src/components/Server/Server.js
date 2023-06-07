@@ -1,23 +1,17 @@
-import logo from './logo.svg';
 import './Server.css';
+import Web3 from 'web3';
+import { useEffect } from 'react';
+
+const web3Free = new Web3(new Web3.providers.HttpProvider('http://localhost:7545'));
+const web3Reserved = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
 
 export default function Server() {
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="main-container">
+      <h3 className="centred-text">
+        LOGS
+      </h3>
     </div>
   );
 }
