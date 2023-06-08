@@ -1,7 +1,7 @@
 # `ssi-cot-eth` DID resolution library
 
 This library acts as a DID resolver for the `ssi-cot-eth` DID method. For additional details
-about how the library works, see [did-method-specification.md](../did-method-specification.md).
+about how the library works, see [did-method-specification.md](./did-method-specification.md).
 
 ## Build the library
 
