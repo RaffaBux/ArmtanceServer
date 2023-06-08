@@ -1,0 +1,20 @@
+{
+    "@context": {
+        "@version": 1.1,
+        "@protected": true,
+        "xsd": "http://www.w3.org/2001/XMLSchema#",
+        "trustChain": {
+            "@id": "https://www.ssicot.com/chain-resolution/#trustCertification",
+            "@type": "https://www.ssicot.com/did-document/#TrustCertification",
+            "@container": "@set"
+        },
+        "resolutionMetadata": "https://w3id.org/did-resolution#dereferencingMetadata",
+        "chainStream": {
+            "@id": "https://www.ssicot.com/chain-resolution/#chainStream",
+            "@container": "@set"
+        },
+        "chainMetadata": {
+            "@id": "https://www.ssicot.com/chain-resolution/#chainMetadata"
+        }
+    }
+}
