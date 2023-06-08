@@ -69,7 +69,6 @@ enum TrustCertificationStatus {
 }
 
 struct ResolvedDidDocument {
-    bool valid;
     bool deactivated;
     uint createdTimestamp;
     uint updatedTimestamp;
@@ -115,7 +114,7 @@ contract ChainOfTrustDidSsi {
     }
 
     function updateTrustCertification(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
         CertificationCredential calldata certificationCredential
     ) public {
@@ -140,7 +139,7 @@ contract ChainOfTrustDidSsi {
 
         // Authenticate the sender
         DidDocumentData storage senderDidDocument = authenticateSender(
-            senderAuthDid,
+            senderDid,
             senderAuthFragment
         );
 
@@ -166,26 +165,23 @@ contract ChainOfTrustDidSsi {
         );
 
         // Verify the signature
-        address signer = getSignatureSigner(senderAuthDid, trustCertification);
+        address signer = getSignatureSigner(senderDid, trustCertification);
         if (signer != issuerAssertionMethod.blockchainAccount) {
             revert InvalidProofSignature("Invalid signature");
         }
 
         // Reify the DID document, if needed
-        reifyOrUpdateDidDocument(senderDidDocument, senderAuthDid);
+        reifyOrUpdateDidDocument(senderDidDocument, senderDid);
         // Add the chain information
         senderDidDocument.trustCertification = trustCertification;
     }
 
     function removeTrustCertification(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment
     ) public {
         // Authenticate the user
-        DidDocumentData storage userDidDocument = authenticateSender(
-            senderAuthDid,
-            senderAuthFragment
-        );
+        DidDocumentData storage userDidDocument = authenticateSender(senderDid, senderAuthFragment);
 
         // Remove the certification
         if (userDidDocument.reified) {
@@ -195,17 +191,17 @@ contract ChainOfTrustDidSsi {
     }
 
     function addVerificationMethod(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
-        VerificationMethodType methodType,
         string memory methodDidUrlFragment,
+        VerificationMethodType methodType,
         address blockchainAccount
     ) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
         // Reify the document if needed
-        reifyOrUpdateDidDocument(didDocument, senderAuthDid);
+        reifyOrUpdateDidDocument(didDocument, senderDid);
 
         // Check for duplicates
         if (
@@ -226,20 +222,24 @@ contract ChainOfTrustDidSsi {
         // Add the verification method
         didDocument.verificationMethods[methodDidUrlFragment] = verificationMethod;
         didDocument.verificationMethodMapKeys.push(methodDidUrlFragment);
+
+        if (methodType == VerificationMethodType.Authentication) {
+            didDocument.authenticationsCount++;
+        }
     }
 
     function addService(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
         string calldata serviceDidUrlFragment,
         string memory serviceType,
         string memory endpoint
     ) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
         // Reify the document if needed
-        reifyOrUpdateDidDocument(didDocument, senderAuthDid);
+        reifyOrUpdateDidDocument(didDocument, senderDid);
 
         // Check if it exists
         if (
@@ -261,17 +261,17 @@ contract ChainOfTrustDidSsi {
     }
 
     function updateVerificationMethod(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
-        string memory verificationMethodFragment,
+        string memory methodDidUrlFragment,
         VerificationMethodType methodType,
         address blockchainAccount
     ) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
         VerificationMethod storage methodToUpdate = didDocument.verificationMethods[
-            verificationMethodFragment
+            methodDidUrlFragment
         ];
         if (!methodToUpdate.valid || methodToUpdate.methodType != methodType) {
             revert DidUrlResourceNotFound("Verification method not found");
@@ -283,14 +283,14 @@ contract ChainOfTrustDidSsi {
     }
 
     function updateService(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
         string calldata serviceDidUrlFragment,
         string memory serviceType,
         string memory endpoint
     ) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
         Service storage serviceToUpdate = didDocument.services[serviceDidUrlFragment];
         if (!serviceToUpdate.valid) {
@@ -303,17 +303,17 @@ contract ChainOfTrustDidSsi {
     }
 
     function removeVerificationMethod(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
-        string memory verificationMethodFragment,
+        string memory methodDidUrlFragment,
         VerificationMethodType methodType
     ) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
         // Retrieve the verification method to delete
         VerificationMethod storage methodToDelete = didDocument.verificationMethods[
-            verificationMethodFragment
+            methodDidUrlFragment
         ];
         if (!methodToDelete.valid || methodToDelete.methodType != methodType) {
             revert DidUrlResourceNotFound("Verification method not found");
@@ -340,17 +340,17 @@ contract ChainOfTrustDidSsi {
         lastVerificationMethod.keyIndex = keyIndex;
 
         // Remove the authentication from the map
-        delete didDocument.verificationMethods[verificationMethodFragment];
+        delete didDocument.verificationMethods[methodDidUrlFragment];
         didDocument.lastUpdateTimestamp = uint64(block.timestamp);
     }
 
     function removeService(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
         string calldata serviceDidUrlFragment
     ) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
         // Retrieve the service to delete
         Service storage serviceToDelete = didDocument.services[serviceDidUrlFragment];
@@ -373,43 +373,61 @@ contract ChainOfTrustDidSsi {
     }
 
     function revokeVerifiableCredential(
-        string calldata senderAuthDid,
+        string calldata senderDid,
         string calldata senderAuthFragment,
         string memory credentialStatusFragment
     ) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
-        reifyOrUpdateDidDocument(didDocument, senderAuthDid);
+        reifyOrUpdateDidDocument(didDocument, senderDid);
 
-        if (didDocument.revokedCredentials[credentialStatusFragment]) {
-            revert RevokedCredential("Credential already revoked");
+        if (!didDocument.revokedCredentials[credentialStatusFragment]) {
+            didDocument.revokedCredentials[credentialStatusFragment] = true;
+            didDocument.revokedCredentialsMapKeys.push(credentialStatusFragment);
         }
-
-        didDocument.revokedCredentials[credentialStatusFragment] = true;
-        didDocument.revokedCredentialsMapKeys.push(credentialStatusFragment);
     }
 
-    function deactivate(string calldata senderAuthDid, string calldata senderAuthFragment) public {
+    function deactivate(string calldata senderDid, string calldata senderAuthFragment) public {
         // Authenticate the sender
-        DidDocumentData storage didDocument = authenticateSender(senderAuthDid, senderAuthFragment);
+        DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
         // Reify the document if needed
-        reifyOrUpdateDidDocument(didDocument, senderAuthDid);
+        reifyOrUpdateDidDocument(didDocument, senderDid);
 
         didDocument.deactivated = true;
     }
 
-    function resolve(string memory did) public view returns (ResolvedDidDocument memory) {
+    function resolve(string calldata did) public view returns (ResolvedDidDocument memory) {
         DidDocumentData storage didDocument = didDocuments[did];
 
-        VerificationMethod[] memory verificationMethods = new VerificationMethod[](
-            didDocument.verificationMethodMapKeys.length
-        );
-        for (uint i = 0; i < verificationMethods.length; i++) {
-            verificationMethods[i] = didDocument.verificationMethods[
-                didDocument.verificationMethodMapKeys[i]
-            ];
+        VerificationMethod[] memory verificationMethods;
+        uint creationTimestamp;
+        uint lastUpdateTimestamp;
+
+        if (didDocument.reified) {
+            creationTimestamp = didDocument.creationTimestamp;
+            lastUpdateTimestamp = didDocument.lastUpdateTimestamp;
+            verificationMethods = new VerificationMethod[](
+                didDocument.verificationMethodMapKeys.length
+            );
+            for (uint i = 0; i < verificationMethods.length; i++) {
+                verificationMethods[i] = didDocument.verificationMethods[
+                    didDocument.verificationMethodMapKeys[i]
+                ];
+            }
+        } else {
+            creationTimestamp = block.timestamp;
+            lastUpdateTimestamp = block.timestamp;
+            verificationMethods = new VerificationMethod[](2);
+            verificationMethods[0] = createFirstVerificationMethod(
+                address(didToAddress(did)),
+                VerificationMethodType.Authentication
+            );
+            verificationMethods[1] = createFirstVerificationMethod(
+                address(didToAddress(did)),
+                VerificationMethodType.AssertionMethod
+            );
         }
 
         Service[] memory services = new Service[](didDocument.serviceMapKeys.length);
@@ -419,10 +437,9 @@ contract ChainOfTrustDidSsi {
 
         return
             ResolvedDidDocument(
-                didDocument.reified,
                 didDocument.deactivated,
-                didDocument.creationTimestamp,
-                didDocument.lastUpdateTimestamp,
+                creationTimestamp,
+                lastUpdateTimestamp,
                 verificationMethods,
                 services,
                 didDocument.trustCertification,
@@ -440,7 +457,7 @@ contract ChainOfTrustDidSsi {
         TrustCertification memory currentCertification = didDocuments[did].trustCertification;
         uint8 index = 0;
 
-        while (currentCertification.valid) {
+        while (currentCertification.valid && index < 10) {
             DidDocumentData storage issuerDocument = didDocuments[currentCertification.issuer];
             certifications[index] = currentCertification;
             statuses[index] = getCertificationStatus(
@@ -505,9 +522,6 @@ contract ChainOfTrustDidSsi {
             revert DidUrlResourceNotFound("Service not found");
         }
         Service memory service = didDocument.services[serviceFragment];
-        if (!service.valid) {
-            revert DidUrlResourceNotFound("Service not found");
-        }
 
         return service;
     }
@@ -647,7 +661,7 @@ contract ChainOfTrustDidSsi {
             certification.credentialStatusFragment,
             "> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://www.ssicot.com/RevocationList2023/#> .\n",
             //
-            "_:c14n0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://www.ssicot.com/credentials/#CertificationCredential> .\n",
+            "_:c14n0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://www.ssicot.com/certification-credential/#CertificationCredential> .\n",
             //
             "_:c14n0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://www.w3.org/2018/credentials#VerifiableCredential> .\n",
             //
@@ -682,11 +696,11 @@ contract ChainOfTrustDidSsi {
 
     function reifyOrUpdateDidDocument(
         DidDocumentData storage didDocument,
-        string memory userDid
+        string memory senderDid
     ) private {
         // Reify the DID document, if needed
         if (!didDocument.reified) {
-            initializeDidDocument(didDocument, userDid);
+            initializeDidDocument(didDocument, senderDid);
         } else {
             didDocument.lastUpdateTimestamp = uint64(block.timestamp);
         }
@@ -694,7 +708,7 @@ contract ChainOfTrustDidSsi {
 
     function initializeDidDocument(
         DidDocumentData storage didDocument,
-        string memory userDid
+        string memory senderDid
     ) private {
         VerificationMethod memory authentication = createFirstVerificationMethod(
             msg.sender,
@@ -716,19 +730,19 @@ contract ChainOfTrustDidSsi {
         didDocument.authenticationsCount = 1;
 
         // Development-only
-        didDocumentsMapKeys.push(userDid);
+        didDocumentsMapKeys.push(senderDid);
     }
 
     function createFirstVerificationMethod(
-        address userAddress,
+        address senderAddress,
         VerificationMethodType methodType
     ) private pure returns (VerificationMethod memory) {
         return
             VerificationMethod(
                 true,
-                userAddress,
+                senderAddress,
                 methodType,
-                0,
+                (methodType == VerificationMethodType.Authentication) ? 0 : 1,
                 (methodType == VerificationMethodType.Authentication)
                     ? "auth-key-1"
                     : "assert-key-1"
