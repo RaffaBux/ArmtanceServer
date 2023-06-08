@@ -6,6 +6,11 @@ For more info on the project check the [Armtance project repo](https://github.co
 
 `node v16.0.0`
 
+## `adb-library` dependence
+
+The server interacts with the SelfSovereignIdentity contract using the `adb-library` developed </br>
+by Alessio De Biasi (who also developed the SSI contract `ChainOfTrustDidSsi.sol`).
+
 ## Requires Truffle
 
 Run `npm install -g truffle` to install all the Truffle dependencies. </br>
