@@ -64,10 +64,6 @@
         "typeRoots": [
             "./types"
         ],
-        // Specify type package names to be included without being referenced in a source file.
-        "types": [
-            "node"
-        ],
         // Disallow accessing UMD globals from modules.
         "allowUmdGlobalAccess": false,
         // Disallow imports to include TypeScript file extensions.

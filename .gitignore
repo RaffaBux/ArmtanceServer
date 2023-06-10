@@ -1,5 +1,10 @@
 # dependencies
-/node_modules
+/server/node_modules
+/server/package-lock.json
+
+/adb-library/library/build
+/adb-library/library/node_modules
+/adb-library/library/package-lock.json
 
 # contracts artifacts
 /server/artifacts

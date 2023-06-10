@@ -1,7 +1,7 @@
 # `ssi-cot-eth` DID resolution library
 
 This library acts as a DID resolver for the `ssi-cot-eth` DID method. For additional details
-about how the library works, see [did-method-specification.md](./did-method-specification.md).
+about how the library works, see [did-method-specification.md](../did-method-specification.md).
 
 ## Build the library
 
@@ -22,6 +22,6 @@ If you are using NPM, you can execute the following two commands to install all 
 dependencies:
 
 ```shell
-npm install jsonld web3
 npm install --save-dev @types/bn.js @types/jsonld @types/node ethereum-abi-types-generator typescript
+npm install jsonld web3
 ```

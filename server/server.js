@@ -1,26 +1,28 @@
 // --- LIBRARIES ---
 
-const Web3 = require('web3');
-const express = require('express');
+import Web3 from 'web3';
+import Express from 'express';
+import { DidResolver } from '../adb-library/library/build/src/resolver/DidResolver.js';
 
 // --- STRUCTS ---
 
-const LogStruct = require('./assets/logStruct.json');
-const AccountStruct = require('./assets/accountStruct.json');
-const ContractStruct = require('./assets/contractStruct.json');
-const INHERITANCE = require('./artifacts/Inheritance.json');
-const CHIDTRDIDSSI = require('./artifacts/ChainOfTrustDidSsi.json');
-const AccountListStruct = require('./assets/accountListStruct.json');
+import LogStruct from './assets/logStruct.json' assert { type: "json" };
+import INHERITANCE from './artifacts/Inheritance.json' assert { type: "json" };
+import AccountStruct from './assets/accountStruct.json' assert { type: "json" };
+import ContractStruct from './assets/contractStruct.json' assert { type: "json" };
+import CHIDTRDIDSSI from './artifacts/ChainOfTrustDidSsi.json' assert { type: "json" };
+import AccountListStruct from './assets/accountListStruct.json' assert { type: "json" };
 
 // --- SERVER ---
 
-const app = express()
-const port = 3015
+const port = 3015;
+const app = Express();
 
 // --- ADDRESSES ---
 
-const vcReleasersChainLength = 3;
-const numberOfReservedAddresses = 6;
+const numberOfVCReleasers = 3;
+const numberOfFreeAccounts = 20;
+const numberOfReservedAccounts = 6;
 
 // --- ADDRESSES RESERVATION ID LEGEND ---
 
@@ -35,12 +37,9 @@ const vcReleaserReservedAccountIndex = 3;
 
 // --- GANACHE NETWORK ---
 
-const web3Free = new Web3(new Web3.providers.HttpProvider('http://localhost:7545'));
-const web3Reserved = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
+const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:7545'));
 
-// --- CONTRACTS ---
-
-var chainIdTrustDidSsi = {};
+// --- CONTRACT ---
 
 var policyIdCounter = 0;
 var inheritancePolicyList = [];
@@ -48,7 +47,12 @@ var inheritancePolicyList = [];
 // --- VARIABLES ---
 
 var logs = [];
+var didResolver = null;
+var freeAccountIdCounter = 0;
+var reservedAccountIdCounter = 0;
 var accountList = {...AccountListStruct};
+var entropyString = 'abcdefghijklmnopqrstuvwxyz0123456789';
+var signatureString = 'this is my official signature!';
 
 // --- USES ---
 
@@ -98,9 +102,8 @@ app.get('/deployINH', async (req, res) => {
 
   var newInhPolicy = {...ContractStruct};
   newInhPolicy.id = policyIdCounter++;
-  newInhPolicy.namecode = 'inh';
 
-  newInhPolicy.contract = new web3Reserved.eth.Contract(INHERITANCE.abi, inhAddress);
+  newInhPolicy.contract = new web3.eth.Contract(INHERITANCE.abi, inhAddress);
 
   newInhPolicy.instance = await newInhPolicy.contract.deploy({
     data: INHERITANCE.bytecode,
@@ -138,80 +141,54 @@ async function addLog(message, content) {
   logs.push(newLog);
 }
 
-async function getAddresses() {
-  const freeAddresses = await web3Free.eth.getAccounts();
-  const reservedAddresses = await web3Reserved.eth.getAccounts();
+async function getDefaultAccounts() {
+  var newAccount;
 
-  var newReservedAccounts = accountList.reserved;
-  var newFreeAccounts = accountList.free;
+  for(let i = 0; i < numberOfReservedAccounts; i++) {
+    newAccount = {...AccountStruct};
+    newAccount.id = reservedAccountIdCounter++;
+    newAccount.wallet = await web3.eth.accounts.create(entropyString);
 
-  freeAddresses.forEach((thisFreeAddress, index) => {
-    // it checks if this free address is already be initialized
-    if(newFreeAccounts.filter((account) => (account.address === thisFreeAddress)).length < 1) {
-      var newAccount = {...AccountStruct};
-      newAccount.address = thisFreeAddress;
-      newAccount.id = index;
-      newFreeAccounts.push(newAccount);
+    if(i > vcReleaserReservedAccountIndex - 1 && i < numberOfReservedAccounts) {
+      newAccount.reservationId = vcReleaserReservedAccountIndex;
+    } else if(i < numberOfReservedAccounts) {
+      newAccount.reservationId = i;
     }
-  });
 
-  reservedAddresses.forEach((thisReservedAddress, index) => {
-    // it checks if this reserved address is already be initialized
-    if(newReservedAccounts.filter((account) => (account.address === thisReservedAddress)).length < 1) {
-      var newAccount = {...AccountStruct};
-      newAccount.address = thisReservedAddress;
-      newAccount.id = index;
+    newAccount.signObj = await newAccount.wallet.sign(signatureString, newAccount.wallet.privateKey);
 
-      // it assigns the correct reservation index
-      if(index < numberOfReservedAddresses && index > vcReleaserReservedAccountIndex - 1) {
-        newAccount.reservationId = vcReleaserReservedAccountIndex;
-      } else if(index < numberOfReservedAddresses) {
-        newAccount.reservationId = index;
-      }
+    accountList.reserved.push(newAccount);
+  }
 
-      newReservedAccounts.push(newAccount);
-    }
-  });
+  for(let i = 0; i < numberOfFreeAccounts; i++) {
+    newAccount = {...AccountStruct};
+    newAccount.id = freeAccountIdCounter++;
+    newAccount.wallet = await web3.eth.accounts.create(entropyString);
 
-  var newAccountList = {...AccountListStruct};
-  newAccountList.reserved = newReservedAccounts;
-  newAccountList.free = newFreeAccounts; 
-  accountList = newAccountList;
+    newAccount.signObj = await newAccount.wallet.sign(signatureString, newAccount.wallet.privateKey);
 
-  await addLog('The following account list has been correctly fetched: ', accountList);
+    accountList.free.push(newAccount);
+  }
+
+  await addLog('The following account list has been correctly created: ', accountList);
 }
 
 async function deploySSI() {
   var ssiAccount = accountList.reserved[ssiReservedAccountIndex];
-  var ssiAddress = ssiAccount.address;
+  var ssiAddress = ssiAccount.wallet.address;
 
-  var newSsiContract = {...ContractStruct};
-  newSsiContract.id = 0;
-  newSsiContract.namecode = 'ssi';
-  
-  newSsiContract.contract = new web3Reserved.eth.Contract(CHIDTRDIDSSI.abi, ssiAddress);
+  //it builds the did resolver object to interface with the contract
+  didResolver = new DidResolver(web3, CHIDTRDIDSSI.abi, ssiAddress, null);
 
-  newSsiContract.instance = await newSsiContract.contract.deploy({
-    data: CHIDTRDIDSSI.bytecode,
-    arguments: []
-  }).send({
-    from: ssiAddress,
-    gas: 30000000,
-    gasPrice: '2000000000'
-  });
-
-  newSsiContract.active = true;
-
-  chainIdTrustDidSsi = newSsiContract;
+  accountList.reserved[ssiReservedAccountIndex].did = (await didResolver.createNewDidFromAccount(ssiAccount.wallet)).did;
 
   accountList.reserved[ssiReservedAccountIndex].active = true;
 
   console.log('CITDS param address: ', ssiAddress); //TEST
-  console.log('CITDS contract deployed at: ', newSsiContract.instance.options.address);  //TEST
+  console.log('DidResolver object succesfully created!'); //TEST
 
   await addLog('ChainIdTrustDidSsi address: ' + ssiAccount, null);
-  await addLog('ChainIdTrustDidSsi contract deployed at: ' + newSsiContract.instance.options.address, null);
-  await addLog('ChainIdTrustDidSsi correctly initialized: ', chainIdTrustDidSsi);
+  await addLog('DidResolver object succesfully created: ', didResolver);
 }
 
 async function setDefaultTestChain() {
@@ -222,15 +199,15 @@ async function setDefaultTestChain() {
     if(reservedAccount.reservationId === vcReleaserReservedAccountIndex) {
       if(firstBlock) {
         // reservedAccount.signature = await web3Reserved.eth.sign('VC releasers chain parent block signature!', reservedAccount.address);
-        // reservedAccount.did = await chainIdTrustDidSsi.instance.methods.createDid().send({from: reservedAccount.address});
+        // reservedAccount.did = await chainIdTrustDidSsi.instance.methods.createDid().send({= require(: reservedAccount.address});
         // reservedAccount.active = true;
 
         // VEDI RIGA 140 DIDRESOLVER.TS LIBRERIA ALESSIO
 
-        parentBlock = false;
+        firstBlock = false;
       } else {
         // reservedAccount.signature = await web3Reserved.eth.sign('VC releasers chain parent block signature!', reservedAccount.address);
-        // reservedAccount.did = await chainIdTrustDidSsi.instance.methods.createChildTrustedDid(reservedAccount.address, previousBlock.signature).send({from: previousBlock.address});
+        // reservedAccount.did = await chainIdTrustDidSsi.instance.methods.createChildTrustedDid(reservedAccount.address, previousBlock.signature).send({= require(: previousBlock.address});
         // reservedAccount.active = true;
       }
 
@@ -245,12 +222,17 @@ app.listen(port, async () => {
   console.log('Armtance server is listening on port: ' + port); //TEST
   await addLog('Armtance server is listening on port: ' + port, null);
 
-  await getAddresses();
-  console.log('Addresses fetched correctly!');  //TEST
+  console.log(0);  //TEST
+
+  await getDefaultAccounts();
+
+  console.log(1); //TEST
 
   await deploySSI();
-  console.log('ChainIdTrustDidSsi contract deployed correctly!'); //TEST
+
+  console.log(2); //TEST
 
   await setDefaultTestChain();
-  console.log('Test Verifiable Credential chain saved correctly!'); //TEST
+  
+  console.log(3); //TEST
 });

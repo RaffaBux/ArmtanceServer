@@ -1,9 +1,21 @@
 {
   "id": null,
-  "address": null,
-  "privateKey": null,
+  "wallet": {
+    "address": null,
+    "privateKey": null,
+    "signTransaction": null,
+    "sign": null,
+    "encrypt": null
+  },
   "did": null,
-  "active": false,
   "reservationId": null,
-  "signature": null
+  "active": false,
+  "signObj": {
+    "message": null,
+    "messageHash": null,
+    "v": null,
+    "r": null,
+    "s": null,
+    "signature": null
+  }
 }

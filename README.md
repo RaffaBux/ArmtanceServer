@@ -8,15 +8,14 @@ For more info on the project check the [Armtance project repo](https://github.co
 
 ## `adb-library` dependence
 
-The server interacts with the SelfSovereignIdentity contract using the `adb-library` developed </br>
-by Alessio De Biasi (who also developed the SSI contract `ChainOfTrustDidSsi.sol`).
+The server interacts with the ChainOfTrustDidSsi contract through the `adb-library` developed
+by Alessio De Biasi (who also developed `ChainOfTrustDidSsi.sol`).
 
 ## Requires Truffle
 
 Run `npm install -g truffle` to install all the Truffle dependencies. </br>
-Due to simulate a real network, two Ganache Networks need to be available and running at:
+Due to simulate a real network, a Ganache Networks needs to be available and running at:
 * http://localhost:7545
-* http://localhost:8545
 
 ## Available Scripts
 
@@ -27,10 +26,10 @@ In the project directory, you can run:
 Runs the Armtance server at [http://localhost:3015](http://localhost:3015). </br>
 Access at to check the logs [http://localhost:3015/logs](http://localhost:3015/logs).
 
-### `npm start`
+### `npm run set-env`
 
-Runs the React app in the development mode. </br>
-Open [http://localhost:3010](http://localhost:3010) to view it in your browser. </br>
+Downloads all the node project dependencies (except for `adb-library` that is already properly manually configurated).
 
-The page will reload when you make changes. </br>
-You may also see any lint errors in the console.
+### `npm run compileAll`
+
+Compiles all the project Solidity contracts and generate their artifacts in `server/artifacts`.
