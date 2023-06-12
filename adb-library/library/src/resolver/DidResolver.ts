@@ -1254,7 +1254,7 @@ export class DidResolver {
     ): ErrorChainResolutionResult {
         return {
             "@context": [
-                this.SSI_COT_CHAIN_RESOLUTION_CONTEXT,
+                DidResolver.SSI_COT_CHAIN_RESOLUTION_CONTEXT,
                 DidResolver.RESOLUTION_ERROR_MESSAGE_CONTEXT
             ],
             resolutionMetadata: {

@@ -8,6 +8,7 @@
     "encrypt": null
   },
   "did": null,
+  "bufferedPrivateKey": null,
   "reservationId": null,
   "active": false,
   "signObj": {

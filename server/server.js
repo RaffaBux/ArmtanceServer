@@ -3,6 +3,10 @@
 import Web3 from 'web3';
 import Express from 'express';
 import { DidResolver } from '../adb-library/library/build/src/resolver/DidResolver.js';
+import { JsonLdContextLoader } from '../adb-library/library/build/src/utils/JsonLdContextLoader.js';
+import { FileContext, FileContextLoader } from '../adb-library/library/build/src/utils/FileContextLoader.js';
+import { VerifiableCredentialManager } from '../adb-library/library/build/src/credential/VerifiableCredentialManager.js';
+import { EcdsaSecp256k1ProofManager } from '../adb-library/library/build/src/credential/proof/ecdsa-secp256k1/EcdsaSecp256k1ProofManager.js';
 
 // --- STRUCTS ---
 
@@ -12,7 +16,6 @@ import AccountStruct from './assets/accountStruct.json' assert { type: "json" };
 import ContractStruct from './assets/contractStruct.json' assert { type: "json" };
 import CHIDTRDIDSSI from './artifacts/ChainOfTrustDidSsi.json' assert { type: "json" };
 import AccountListStruct from './assets/accountListStruct.json' assert { type: "json" };
-import TrustCertificationStruct from './assets/trustCertification.json' assert { type: "json" };
 
 // --- SERVER ---
 
@@ -51,9 +54,13 @@ var logs = [];
 var didResolver = null;
 var freeAccountIdCounter = 0;
 var reservedAccountIdCounter = 0;
+var verifiableCredentialManager = null;
 var accountList = {...AccountListStruct};
-var entropyString = 'abcdefghijklmnopqrstuvwxyz0123456789';
+var ecdsaSecp256k1CreationOptions = null;
 var signatureString = 'this is my official signature!';
+var entropyString = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+const fileContextLoader = new FileContextLoader('./adb-library/library/context');
 
 // --- USES ---
 
@@ -149,6 +156,7 @@ async function getDefaultAccounts() {
     newAccount = {...AccountStruct};
     newAccount.id = reservedAccountIdCounter++;
     newAccount.wallet = await web3.eth.accounts.create(entropyString);
+    web3.eth.accounts.wallet.add(newAccount.wallet);
 
     if(i > vcReleaserReservedAccountIndex - 1 && i < numberOfReservedAccounts) {
       newAccount.reservationId = vcReleaserReservedAccountIndex;
@@ -165,6 +173,7 @@ async function getDefaultAccounts() {
     newAccount = {...AccountStruct};
     newAccount.id = freeAccountIdCounter++;
     newAccount.wallet = await web3.eth.accounts.create(entropyString);
+    web3.eth.accounts.wallet.add(newAccount.wallet);
 
     newAccount.signObj = await newAccount.wallet.sign(signatureString, newAccount.wallet.privateKey);
 
@@ -175,42 +184,101 @@ async function getDefaultAccounts() {
 }
 
 async function deploySSI() {
-  var ssiAccount = accountList.reserved[ssiReservedAccountIndex];
-  var ssiAddress = ssiAccount.wallet.address;
+  const addresses = await web3.eth.getAccounts();
+
+  const ssiContract = new web3.eth.Contract(CHIDTRDIDSSI.abi, addresses[ssiReservedAccountIndex]);
+
+  const ssiContractInstance = await ssiContract.deploy({
+    data: CHIDTRDIDSSI.bytecode,
+    arguments: []
+  }).send({
+    from: addresses[ssiReservedAccountIndex],
+    gas: 5000000,
+    gasPrice: '3000000000'
+  });
 
   //it builds the did resolver object to interface with the contract
-  didResolver = new DidResolver(web3, CHIDTRDIDSSI.abi, ssiAddress, null);
+  didResolver = new DidResolver(web3, CHIDTRDIDSSI.abi, addresses[ssiReservedAccountIndex]);
 
-  accountList.reserved[ssiReservedAccountIndex].did = (await didResolver.createNewDidFromAccount(ssiAccount.wallet)).did;
+  // accountList.reserved[ssiReservedAccountIndex].did = (await didResolver.createNewDidFromAccount(ssiAccount.wallet)).did;
 
   accountList.reserved[ssiReservedAccountIndex].active = true;
 
-  console.log('CITDS param address: ', ssiAddress); //TEST
+  console.log('CITDS param address: ', addresses[ssiReservedAccountIndex]); //TEST
   console.log('DidResolver object succesfully created!'); //TEST
 
-  await addLog('ChainIdTrustDidSsi address: ' + ssiAccount, null);
+  await addLog('ChainIdTrustDidSsi address: ' + addresses[ssiReservedAccountIndex], null);
   await addLog('DidResolver object succesfully created: ', didResolver);
 }
 
 async function setDefaultTestChain() {
   var firstBlock = true;
   var previousBlockAccount;
-  var newTrustCertification;
+  var verifiableCredential;
+  var accountDidObj;
   
-  accountList.reserved.forEach(async (reservedAccount) => {
+  accountList.reserved.forEach(async (reservedAccount, index) => {
     if(reservedAccount.reservationId === vcReleaserReservedAccountIndex) {      
-      reservedAccount.did = await didResolver.createNewDidFromAccount(reservedAccount.wallet);
+      accountDidObj = await didResolver.createNewDidFromAccount(reservedAccount.wallet);
+      reservedAccount.did = accountDidObj.did;
+      reservedAccount.bufferedPrivateKey = accountDidObj.privateKey;
       if(firstBlock) {
         firstBlock = false;
       } else {
-        newTrustCertification = {...TrustCertificationStruct};
-        newTrustCertification.credentialSubject.id = reservedAccount.did;
-        newTrustCertification.issuer = previousBlockAccount.did;
+        verifiableCredential = await getVerifiableCredential(previousBlockAccount, reservedAccount);
+
+        const trustedIssuers = new Set();
+        trustedIssuers.add(previousBlockAccount.did);
+
+        console.log(verifiableCredential);
+        
+        var aaa = await didResolver.updateTrustCertification(verifiableCredential, trustedIssuers, fileContextLoader, `${reservedAccount.did}#auth-key-1`, reservedAccount.wallet.address);
+      
+        console.log(aaa);
+
+        console.log('AAAAAAAAAA' + index);
       }
+
+      console.log('BBBBBBBBBB' + index);
+      console.log(`${reservedAccount.did}#auth-key-1`);
 
       reservedAccount.active = true;
       previousBlockAccount = reservedAccount;
     }
+  });
+}
+
+async function setVerificationEnviroment() {
+  ecdsaSecp256k1CreationOptions = new EcdsaSecp256k1ProofManager(web3, didResolver);
+  verifiableCredentialManager = new VerifiableCredentialManager(web3, didResolver, ecdsaSecp256k1CreationOptions);
+}
+
+async function getVerifiableCredential(parent, child) {
+  return verifiableCredentialManager.createVerifiableCredential({
+    additionalContexts: [
+      'https://identity.foundation/EcdsaSecp256k1RecoverySignature2020/lds-ecdsa-secp256k1-recovery2020-2.0.jsonld',
+      'https://www.ssicot.com/certification-credential',
+      'https://www.ssicot.com/RevocationList2023'
+    ],
+    additionalTypes: ['CertificationCredential'],
+    credentialSubject: {
+      id: child.did
+    },
+    issuer: parent.did,
+    expirationDate: new Date('2024-01-01T19:24:24Z'),
+    // credentialStatus: {
+    //   id: `${parent.did}#revoc-1`,
+    //   type: "RevocationList2023"
+    // }
+  }, {
+    chainId: await didResolver.getChainId(),
+    verificationMethod: `${parent.did}#assert-key-1`,
+    proofPurpose: 'assertionMethod',
+    privateKey: parent.bufferedPrivateKey,
+    documentLoader: JsonLdContextLoader.concatenateLoaders([
+      fileContextLoader.createContextLoader(FileContext.CERTIFICATION_CREDENTIAL_LOADER),
+      fileContextLoader.createContextLoader(FileContext.REVOCATION_LIST_LOADER)
+    ])
   });
 }
 
@@ -224,9 +292,13 @@ app.listen(port, async () => {
 
   await getDefaultAccounts();
 
-  console.log(1); //TEST
+  console.log(0.1);
 
   await deploySSI();
+
+  console.log(1); //TEST
+
+  await setVerificationEnviroment();
 
   console.log(2); //TEST
 
