@@ -1,13 +1,13 @@
 {
-  "@context": [
-      "https://www.w3.org/2018/credentials/v1",
-      "https://identity.foundation/EcdsaSecp256k1RecoverySignature2020/lds-ecdsa-secp256k1-recovery2020-2.0.jsonld",
-      "https://www.ssicot.com/credentials",
-      "https://www.ssicot.com/RevocationList2023"
+	"@context": [
+		"https://www.w3.org/2018/credentials/v1",
+		"https://identity.foundation/EcdsaSecp256k1RecoverySignature2020/lds-ecdsa-secp256k1-recovery2020-2.0.jsonld",
+		"https://www.ssicot.com/credentials",
+		"https://www.ssicot.com/RevocationList2023"
   ],
   "type": ["VerifiableCredential", "CertificationCredential"],
   "credentialSubject": {
-      "id": "<DID of the DID subject>"
+		"id": null
   },
   "issuer": null,
   "issuanceDate": null,

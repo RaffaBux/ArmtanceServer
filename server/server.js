@@ -12,6 +12,7 @@ import AccountStruct from './assets/accountStruct.json' assert { type: "json" };
 import ContractStruct from './assets/contractStruct.json' assert { type: "json" };
 import CHIDTRDIDSSI from './artifacts/ChainOfTrustDidSsi.json' assert { type: "json" };
 import AccountListStruct from './assets/accountListStruct.json' assert { type: "json" };
+import TrustCertificationStruct from './assets/trustCertification.json' assert { type: "json" };
 
 // --- SERVER ---
 
@@ -192,26 +193,23 @@ async function deploySSI() {
 }
 
 async function setDefaultTestChain() {
-  var previousBlock;
   var firstBlock = true;
+  var previousBlockAccount;
+  var newTrustCertification;
   
   accountList.reserved.forEach(async (reservedAccount) => {
-    if(reservedAccount.reservationId === vcReleaserReservedAccountIndex) {
+    if(reservedAccount.reservationId === vcReleaserReservedAccountIndex) {      
+      reservedAccount.did = await didResolver.createNewDidFromAccount(reservedAccount.wallet);
       if(firstBlock) {
-        // reservedAccount.signature = await web3Reserved.eth.sign('VC releasers chain parent block signature!', reservedAccount.address);
-        // reservedAccount.did = await chainIdTrustDidSsi.instance.methods.createDid().send({= require(: reservedAccount.address});
-        // reservedAccount.active = true;
-
-        // VEDI RIGA 140 DIDRESOLVER.TS LIBRERIA ALESSIO
-
         firstBlock = false;
       } else {
-        // reservedAccount.signature = await web3Reserved.eth.sign('VC releasers chain parent block signature!', reservedAccount.address);
-        // reservedAccount.did = await chainIdTrustDidSsi.instance.methods.createChildTrustedDid(reservedAccount.address, previousBlock.signature).send({= require(: previousBlock.address});
-        // reservedAccount.active = true;
+        newTrustCertification = {...TrustCertificationStruct};
+        newTrustCertification.credentialSubject.id = reservedAccount.did;
+        newTrustCertification.issuer = previousBlockAccount.did;
       }
 
-      previousBlock = reservedAccount;
+      reservedAccount.active = true;
+      previousBlockAccount = reservedAccount;
     }
   });
 }

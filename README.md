@@ -24,7 +24,7 @@ In the project directory, you can run:
 ### `npm run start-server`
 
 Runs the Armtance server at [http://localhost:3015](http://localhost:3015). </br>
-Access at to check the logs [http://localhost:3015/logs](http://localhost:3015/logs).
+Access at [http://localhost:3015/logs](http://localhost:3015/logs) to check the logs.
 
 ### `npm run set-env`
 
