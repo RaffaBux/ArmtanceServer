@@ -15,6 +15,7 @@
   },
   "scripts": {
     "start": "set PORT=3010 && react-scripts start",
+    "ganache": "ganache -a 30 -p 7545 --acctKeys server/assets/test/ganache-accounts.json",
     "set-server-env": "cd server && npm install",
     "set-adb-lib-env": "cd adb-library/library && npm install && npx tsc",
     "set-env": "npm run set-server-env && npm run set-adb-lib-env",

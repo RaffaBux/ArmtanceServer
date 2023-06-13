@@ -10,12 +10,13 @@ import { EcdsaSecp256k1ProofManager } from '../adb-library/library/build/src/cre
 
 // --- STRUCTS ---
 
-import LogStruct from './assets/logStruct.json' assert { type: "json" };
-import INHERITANCE from './artifacts/Inheritance.json' assert { type: "json" };
-import AccountStruct from './assets/accountStruct.json' assert { type: "json" };
-import ContractStruct from './assets/contractStruct.json' assert { type: "json" };
-import CHIDTRDIDSSI from './artifacts/ChainOfTrustDidSsi.json' assert { type: "json" };
-import AccountListStruct from './assets/accountListStruct.json' assert { type: "json" };
+import LogStruct from './assets/logStruct.json' assert { type: 'json' };
+import INHERITANCE from './artifacts/Inheritance.json' assert { type: 'json' };
+import AccountStruct from './assets/accountStruct.json' assert { type: 'json' };
+import ContractStruct from './assets/contractStruct.json' assert { type: 'json' };
+import CHIDTRDIDSSI from './artifacts/ChainOfTrustDidSsi.json' assert { type: 'json' };
+import AccountListStruct from './assets/accountListStruct.json' assert { type: 'json' };
+import GanacheAccounts from './assets/test/ganache-accounts.json' assert { type: 'json'};
 
 // --- SERVER ---
 
@@ -47,18 +48,15 @@ const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:7545'));
 
 var policyIdCounter = 0;
 var inheritancePolicyList = [];
+var ssiContract = {...ContractStruct};
 
 // --- VARIABLES ---
 
 var logs = [];
 var didResolver = null;
-var freeAccountIdCounter = 0;
-var reservedAccountIdCounter = 0;
 var verifiableCredentialManager = null;
 var accountList = {...AccountListStruct};
 var ecdsaSecp256k1CreationOptions = null;
-var signatureString = 'this is my official signature!';
-var entropyString = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 const fileContextLoader = new FileContextLoader('./adb-library/library/context');
 
@@ -151,101 +149,106 @@ async function addLog(message, content) {
 
 async function getDefaultAccounts() {
   var newAccount;
+  var reservedAddressIDCounter = 0;
+  var freeAddressIDCounter = 0;
 
-  for(let i = 0; i < numberOfReservedAccounts; i++) {
+  for(var key in GanacheAccounts.addresses) {
     newAccount = {...AccountStruct};
-    newAccount.id = reservedAccountIdCounter++;
-    newAccount.wallet = await web3.eth.accounts.create(entropyString);
-    web3.eth.accounts.wallet.add(newAccount.wallet);
+    newAccount.address = GanacheAccounts.addresses[key];
+    newAccount.privateKey = GanacheAccounts.private_keys[key];
 
-    if(i > vcReleaserReservedAccountIndex - 1 && i < numberOfReservedAccounts) {
-      newAccount.reservationId = vcReleaserReservedAccountIndex;
-    } else if(i < numberOfReservedAccounts) {
-      newAccount.reservationId = i;
+    if(reservedAddressIDCounter < numberOfReservedAccounts) {
+      if(reservedAddressIDCounter > vcReleaserReservedAccountIndex - 1 && reservedAddressIDCounter < numberOfReservedAccounts) {
+        newAccount.reservationId = vcReleaserReservedAccountIndex;
+      } else if(reservedAddressIDCounter < numberOfReservedAccounts) {
+        newAccount.reservationId = reservedAddressIDCounter;
+      }
+
+      newAccount.id = reservedAddressIDCounter++;
+      accountList.reserved.push(newAccount);
+    } else {
+      newAccount.id = freeAddressIDCounter++;
+      accountList.free.push(newAccount);
     }
-
-    newAccount.signObj = await newAccount.wallet.sign(signatureString, newAccount.wallet.privateKey);
-
-    accountList.reserved.push(newAccount);
-  }
-
-  for(let i = 0; i < numberOfFreeAccounts; i++) {
-    newAccount = {...AccountStruct};
-    newAccount.id = freeAccountIdCounter++;
-    newAccount.wallet = await web3.eth.accounts.create(entropyString);
-    web3.eth.accounts.wallet.add(newAccount.wallet);
-
-    newAccount.signObj = await newAccount.wallet.sign(signatureString, newAccount.wallet.privateKey);
-
-    accountList.free.push(newAccount);
   }
 
   await addLog('The following account list has been correctly created: ', accountList);
 }
 
 async function deploySSI() {
-  const addresses = await web3.eth.getAccounts();
+  var ssiAddress = accountList.reserved[ssiReservedAccountIndex].address;
 
-  const ssiContract = new web3.eth.Contract(CHIDTRDIDSSI.abi, addresses[ssiReservedAccountIndex]);
+  ssiContract.contract = new web3.eth.Contract(CHIDTRDIDSSI.abi, ssiAddress);
 
-  const ssiContractInstance = await ssiContract.deploy({
+  ssiContract.instance = await ssiContract.contract.deploy({
     data: CHIDTRDIDSSI.bytecode,
     arguments: []
   }).send({
-    from: addresses[ssiReservedAccountIndex],
+    from: ssiAddress,
     gas: 5000000,
     gasPrice: '3000000000'
   });
 
-  //it builds the did resolver object to interface with the contract
-  didResolver = new DidResolver(web3, CHIDTRDIDSSI.abi, addresses[ssiReservedAccountIndex]);
-
-  // accountList.reserved[ssiReservedAccountIndex].did = (await didResolver.createNewDidFromAccount(ssiAccount.wallet)).did;
-
   accountList.reserved[ssiReservedAccountIndex].active = true;
 
-  console.log('CITDS param address: ', addresses[ssiReservedAccountIndex]); //TEST
+
+  // DidResolver.js:29
+  // web3;
+  // contract;
+  // gasLimit;
+  // trustCredentialManager;
+  // chainId;
+  // constructor(web3, instance, gasLimit) {
+  //   this.web3 = web3;
+  //   this.contract = instance.methods;
+  //   this.gasLimit = gasLimit;
+  //   this.trustCredentialManager = new VerifiableCredentialManager_1.VerifiableCredentialManager(this.web3, this, new EcdsaSecp256k1ProofManager_1.EcdsaSecp256k1ProofManager(this.web3, this));
+  //   this.chainId = 0;
+  // }
+
+  //it builds the did resolver object to interface with the contract
+  didResolver = new DidResolver(web3, ssiContract.instance, 650000);
+
+  console.log('CITDS param address: ', ssiAddress); //TEST
   console.log('DidResolver object succesfully created!'); //TEST
 
-  await addLog('ChainIdTrustDidSsi address: ' + addresses[ssiReservedAccountIndex], null);
+  await addLog('ChainIdTrustDidSsi address: ' + ssiAddress, null);
   await addLog('DidResolver object succesfully created: ', didResolver);
 }
 
-async function setDefaultTestChain() {
+function setDefaultTestChain() {
   var firstBlock = true;
-  var previousBlockAccount;
-  var verifiableCredential;
-  var accountDidObj;
-  
-  accountList.reserved.forEach(async (reservedAccount, index) => {
-    if(reservedAccount.reservationId === vcReleaserReservedAccountIndex) {      
-      accountDidObj = await didResolver.createNewDidFromAccount(reservedAccount.wallet);
-      reservedAccount.did = accountDidObj.did;
-      reservedAccount.bufferedPrivateKey = accountDidObj.privateKey;
-      if(firstBlock) {
-        firstBlock = false;
-      } else {
-        verifiableCredential = await getVerifiableCredential(previousBlockAccount, reservedAccount);
-
-        const trustedIssuers = new Set();
-        trustedIssuers.add(previousBlockAccount.did);
-
-        console.log(verifiableCredential);
-        
-        var aaa = await didResolver.updateTrustCertification(verifiableCredential, trustedIssuers, fileContextLoader, `${reservedAccount.did}#auth-key-1`, reservedAccount.wallet.address);
-      
-        console.log(aaa);
-
-        console.log('AAAAAAAAAA' + index);
-      }
-
-      console.log('BBBBBBBBBB' + index);
-      console.log(`${reservedAccount.did}#auth-key-1`);
-
-      reservedAccount.active = true;
-      previousBlockAccount = reservedAccount;
+ 
+  for(let i = 0; i < accountList.reserved.length; i++) {
+    if(accountList.reserved[i].reservationId === vcReleaserReservedAccountIndex) {
+      firstBlock ? firstBlock = false : buildChain(i);
     }
-  });
+  }
+}
+
+async function buildChain(currentBlockIndex) {
+  var accountDidObj;
+  var verifiableCredential;
+
+  if(accountList.reserved[currentBlockIndex - 1].did === null || accountList.reserved[i].bufferedPrivateKey === null || accountList.reserved[i] === false) {
+    accountDidObj = await didResolver.createNewDidFromAccount(accountList.reserved[currentBlockIndex - 1]);
+    accountList.reserved[currentBlockIndex - 1].did = accountDidObj.did;
+    accountList.reserved[currentBlockIndex - 1].bufferedPrivateKey = accountDidObj.privateKey;
+    accountList.reserved[currentBlockIndex - 1].active = true;
+  }
+  
+  accountDidObj = await didResolver.createNewDidFromAccount(accountList.reserved[currentBlockIndex]);
+  accountList.reserved[currentBlockIndex].did = accountDidObj.did;
+  accountList.reserved[currentBlockIndex].bufferedPrivateKey = accountDidObj.privateKey;
+
+  verifiableCredential = await getVerifiableCredential(accountList.reserved[currentBlockIndex - 1], accountList.reserved[currentBlockIndex]);
+
+  const trustedIssuers = new Set();
+  trustedIssuers.add(accountList.reserved[currentBlockIndex - 1].did);
+  
+  await didResolver.updateTrustCertification(verifiableCredential, trustedIssuers, fileContextLoader, `${accountList.reserved[currentBlockIndex].did}#auth-key-1`, accountList.reserved[currentBlockIndex].address);
+
+  accountList.reserved[currentBlockIndex].active = true;
 }
 
 async function setVerificationEnviroment() {
@@ -266,10 +269,10 @@ async function getVerifiableCredential(parent, child) {
     },
     issuer: parent.did,
     expirationDate: new Date('2024-01-01T19:24:24Z'),
-    // credentialStatus: {
-    //   id: `${parent.did}#revoc-1`,
-    //   type: "RevocationList2023"
-    // }
+    credentialStatus: {
+      id: `${parent.did}#revoc-1`,
+      type: "RevocationList2023"
+    }
   }, {
     chainId: await didResolver.getChainId(),
     verificationMethod: `${parent.did}#assert-key-1`,

@@ -21,6 +21,11 @@ Due to simulate a real network, a Ganache Networks needs to be available and run
 
 In the project directory, you can run:
 
+### `npm run ganache`
+
+Must be executed before the serever start-up. </br>
+Runs the Ganache network at [http://localhost:7545](http://localhost:7545).
+
 ### `npm run start-server`
 
 Runs the Armtance server at [http://localhost:3015](http://localhost:3015). </br>

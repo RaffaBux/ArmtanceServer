@@ -9,6 +9,8 @@ package-lock.json
 /adb-library/library/node_modules
 /adb-library/library/package-lock.json
 
+/server/assets/test
+
 # contracts artifacts
 /server/artifacts
 
@@ -18,6 +20,7 @@ package-lock.json
 .env.development.local
 .env.test.local
 .env.production.local
+.vscode
 
 npm-debug.log*
 yarn-debug.log*
