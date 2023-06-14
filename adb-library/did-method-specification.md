@@ -88,6 +88,7 @@ you need to create a new object of the `DidResolver` class, providing:
 
 -   An instance of the `Web3` class, which will be used to interact with the blockchain;
 -   The ABI of the smart contract;
+-   The address of the smart contract;
 -   An optional global gas limit that will be used in case no gas limit is specified when calling
     one of the methods exposed by the `DidResolver` class.
 
@@ -148,7 +149,7 @@ required but not relevant are condensed with `...`):
     "@context": [
         "https://www.w3.org/2018/credentials/v1",
         "https://identity.foundation/EcdsaSecp256k1RecoverySignature2020/lds-ecdsa-secp256k1-recovery2020-2.0.jsonld",
-        "https://www.ssicot.com/credentials",
+        "https://www.ssicot.com/certification-credential",
         "https://www.ssicot.com/RevocationList2023"
     ],
     "type": ["VerifiableCredential", "CertificationCredential"],

@@ -4,7 +4,7 @@ For more info on the project check the [Armtance project repo](https://github.co
 
 ## Recommended Node version for the project
 
-`node v20.3.0`
+`node v18.16.0`
 
 ## `adb-library` dependence
 

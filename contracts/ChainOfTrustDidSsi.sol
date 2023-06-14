@@ -152,7 +152,7 @@ contract ChainOfTrustDidSsi {
             !issuerAssertionMethod.valid ||
             issuerAssertionMethod.methodType != VerificationMethodType.AssertionMethod
         ) {
-            revert InvalidDidUrl("Invalid proof verification method");
+            revert InvalidDidUrl("Invalid certification proof verification method");
         }
 
         TrustCertification memory trustCertification = TrustCertification(
@@ -167,7 +167,7 @@ contract ChainOfTrustDidSsi {
         // Verify the signature
         address signer = getSignatureSigner(senderDid, trustCertification);
         if (signer != issuerAssertionMethod.blockchainAccount) {
-            revert InvalidProofSignature("Invalid signature");
+            revert InvalidProofSignature("Invalid certification proof signature");
         }
 
         // Reify the DID document, if needed
@@ -208,7 +208,9 @@ contract ChainOfTrustDidSsi {
             didDocument.verificationMethods[methodDidUrlFragment].valid ||
             didDocument.services[methodDidUrlFragment].valid
         ) {
-            revert DuplicatedResource("DID URL already present");
+            revert DuplicatedResource(
+                "DID URL of the verification method to add is already present"
+            );
         }
 
         VerificationMethod memory verificationMethod = VerificationMethod(
@@ -246,7 +248,7 @@ contract ChainOfTrustDidSsi {
             didDocument.verificationMethods[serviceDidUrlFragment].valid ||
             didDocument.services[serviceDidUrlFragment].valid
         ) {
-            revert DuplicatedResource("DID URL already present");
+            revert DuplicatedResource("DID URL of the service to add is already present");
         }
 
         // Add the service
@@ -270,11 +272,14 @@ contract ChainOfTrustDidSsi {
         // Authenticate the sender
         DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
+        // Reify the document if needed
+        reifyOrUpdateDidDocument(didDocument, senderDid);
+
         VerificationMethod storage methodToUpdate = didDocument.verificationMethods[
             methodDidUrlFragment
         ];
         if (!methodToUpdate.valid || methodToUpdate.methodType != methodType) {
-            revert DidUrlResourceNotFound("Verification method not found");
+            revert DidUrlResourceNotFound("Verification method to update not found");
         }
 
         // Update the method
@@ -294,7 +299,7 @@ contract ChainOfTrustDidSsi {
 
         Service storage serviceToUpdate = didDocument.services[serviceDidUrlFragment];
         if (!serviceToUpdate.valid) {
-            revert DidUrlResourceNotFound("Service not found");
+            revert DidUrlResourceNotFound("Service to update not found");
         }
 
         serviceToUpdate.serviceType = serviceType;
@@ -311,12 +316,15 @@ contract ChainOfTrustDidSsi {
         // Authenticate the sender
         DidDocumentData storage didDocument = authenticateSender(senderDid, senderAuthFragment);
 
+        // Reify the document if needed
+        reifyOrUpdateDidDocument(didDocument, senderDid);
+
         // Retrieve the verification method to delete
         VerificationMethod storage methodToDelete = didDocument.verificationMethods[
             methodDidUrlFragment
         ];
         if (!methodToDelete.valid || methodToDelete.methodType != methodType) {
-            revert DidUrlResourceNotFound("Verification method not found");
+            revert DidUrlResourceNotFound("Verification method to remove not found");
         }
 
         // Disallow removing the last authentication method
@@ -355,7 +363,7 @@ contract ChainOfTrustDidSsi {
         // Retrieve the service to delete
         Service storage serviceToDelete = didDocument.services[serviceDidUrlFragment];
         if (!serviceToDelete.valid) {
-            revert DidUrlResourceNotFound("Service not found");
+            revert DidUrlResourceNotFound("Service to remove not found");
         }
 
         // Remove the service from the keys
@@ -484,7 +492,7 @@ contract ChainOfTrustDidSsi {
             verificationMethod = didDocument.verificationMethods[methodDidUrlFragment];
         } else {
             if (!isValidDid(methodDid)) {
-                revert InvalidDidUrl("Invalid DID URL verification method");
+                revert InvalidDidUrl("Invalid verification method DID URL to resolve");
             }
             // Create the verification method on the fly
             bytes memory fragmentBytes = bytes(methodDidUrlFragment);
@@ -519,7 +527,7 @@ contract ChainOfTrustDidSsi {
         DidDocumentData storage didDocument = didDocuments[serviceDid];
 
         if (!didDocument.reified) {
-            revert DidUrlResourceNotFound("Service not found");
+            revert DidUrlResourceNotFound("Invalid service DID URL to resolve");
         }
         Service memory service = didDocument.services[serviceFragment];
 
@@ -531,7 +539,7 @@ contract ChainOfTrustDidSsi {
         string calldata credentialFragment
     ) public view returns (bool) {
         if (!isValidDid(credentialDid)) {
-            revert InvalidDidUrl("Invalid credential DID");
+            revert InvalidDidUrl("Invalid credential DID for the credential status");
         }
 
         DidDocumentData storage didDocument = didDocuments[credentialDid];
@@ -591,15 +599,15 @@ contract ChainOfTrustDidSsi {
 
         // issuer must be a valid DID
         if (!isValidDid(issuer)) {
-            revert InvalidIssuer("Invalid credential issuer DID");
+            revert InvalidIssuer("Invalid certification issuer DID");
         }
         // issuanceDate <= now()
         if (certificationCredential.issuanceTimestamp > block.timestamp) {
-            revert InvalidIssuanceDate("Invalid credential issuance date");
+            revert InvalidIssuanceDate("Invalid certification issuance date");
         }
         // expirationData >= now()
         if (certificationCredential.expirationTimestamp < block.timestamp) {
-            revert ExpiredCredential("The credential is expired");
+            revert ExpiredCredential("The certification is expired");
         }
         // The credential must not be revoked
         if (
@@ -607,7 +615,7 @@ contract ChainOfTrustDidSsi {
                 certificationCredential.credentialStatusFragment
             ]
         ) {
-            revert RevokedCredential("Revoked credential");
+            revert RevokedCredential("Revoked certification");
         }
     }
 
@@ -617,7 +625,7 @@ contract ChainOfTrustDidSsi {
     ) private view returns (DidDocumentData storage) {
         // senderAuthDid must be a valid DID
         if (!isValidDid(senderAuthDid)) {
-            revert InvalidDidUrl("Authentication DID not valid");
+            revert InvalidDidUrl("Authentication DID URL is not valid");
         }
 
         // The DID document of the user must not be deactivated

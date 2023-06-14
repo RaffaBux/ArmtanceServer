@@ -1,7 +1,7 @@
 {
     "name": "master-degree-thesis-library",
     "version": "1.0.0",
-    "description": "Library used in the Master Degree Thesis of Alessio De Biasi",
+    "description": "Library used in the Alessio De Biasi's Master Degree Thesis",
     "main": "index.js",
     "private": true,
     "directories": {
@@ -11,7 +11,8 @@
         "build": "tsc",
         "build-types": "abi-types-generator ../contract/build/src/contracts/ChainOfTrustDidSsi.json --output=./types --provider=web3",
         "test-canonicalization": "node ./build/test/test-canonicalization.js",
-        "test-library": "node -r ts-node/register --preserve-symlinks --preserve-symlinks-main ./build/test/test-library.js"
+        "test-library": "node -r ts-node/register --preserve-symlinks --preserve-symlinks-main ./build/test/test-library.js",
+        "test-gas-cost": "node -r ts-node/register --preserve-symlinks --preserve-symlinks-main ./build/test/test-gas-cost.js"
     },
     "author": "Alessio De Biasi",
     "license": "ISC",

@@ -2,6 +2,7 @@
 
 import Web3 from 'web3';
 import Express from 'express';
+import BodyParser from 'body-parser';
 import { DidResolver } from '../adb-library/library/build/src/resolver/DidResolver.js';
 import { JsonLdContextLoader } from '../adb-library/library/build/src/utils/JsonLdContextLoader.js';
 import { FileContext, FileContextLoader } from '../adb-library/library/build/src/utils/FileContextLoader.js';
@@ -71,16 +72,27 @@ app.use(function(req, res, next) {
   next();
 });
 
+app.use(BodyParser.urlencoded({extended: true}));
+app.use(BodyParser.json());
+
 // --- GETS ---
 
 app.get('/getAccounts', (req, res) => {
+  var accountDidObj;
+  
+  accountList.free.forEach(async (freeAccount, index) => {
+    accountDidObj = await didResolver.createNewDidFromAccount(freeAccount);
+    accountList.free[index].did = accountDidObj.did;
+    accountList.free[index].bufferedPrivateKey = accountDidObj.privateKey;
+  });
+
   res.send(accountList.free);
 });
 
 app.get('/getOwner', (req, res) => {
   accountList.reserved[ownerReservedAccountIndex].active = true;
 
-  res.send(accountList.reserved[ownerReservedAccountIndex])
+  res.send(accountList.reserved[ownerReservedAccountIndex]);
 });
 
 app.get('/logs', (req, res) => {
@@ -89,7 +101,8 @@ app.get('/logs', (req, res) => {
 
 app.post('/isINHDeployed', (req, res) => {
   var result = false;
-  var policyId = req.body.policyId;
+  
+  var policyId = req.body.policyIdentifier;
 
   var searchedPolicyResults = inheritancePolicyList.filter((policy) => (policy.id === policyId));
   
@@ -97,9 +110,7 @@ app.post('/isINHDeployed', (req, res) => {
     result = true;
   }
 
-  res.send({
-    "result": result
-  });
+  res.send({"result": result});
 });
 
 app.get('/deployINH', async (req, res) => {
@@ -135,7 +146,51 @@ app.get('/deployINH', async (req, res) => {
 });
 
 app.post('/saveHeirs', (req, res) => {
-  var heirList = req.body;
+  var policyId = req.body.policyIdentifier;
+  var heirList = req.body.heirList;
+  var sender = req.body.sender;
+
+  //TEST
+  for(let i = 0; i < heirList.length; i++) {
+    accountList.free.forEach((freeAccount) => {
+      if(freeAccount.did === heirList[i]) {
+        freeAccount.active = true;
+      }
+    });
+  }
+
+  var result = false;
+  var error = 'Nessun errore vai tra'; //TEST
+
+  var policyFilter = inheritancePolicyList.filter((policy) => (policy.id === policyId && policy.active === true))
+
+  if(sender.address !== accountList.reserved[ownerReservedAccountIndex].address) {
+    error = 'ERRORE: Chi sta impostando gli eredi non è il proprietario della polizza d`eredità!';
+  } else if(policyFilter.length !== 1) {
+    error = 'ERRORE: Esistono più polizze d`eredita attive con lo stesso identificativo! SUS!';
+  } 
+  // else {
+  //   heirList.forEach(async (heirToBeSaved) => {
+  //     var addingResult = await policyFilter[0].instance.methods.saveHeir(heirToBeSaved).send({ from: sender.address });
+
+  //     if(addingResult) {
+  //       addingResultMessage = 'Erede ' + heirToBeSaved.did + ' correttamente salvato nel contratto.';
+  //       result = true;
+  //     } else {
+  //       error = 'ERRORE inserimento: ' + heirToBeSaved.did;  
+  //       console.log(error);
+  //     }
+  //   });
+  // }
+
+  // result? await addLog('Inserimento eredi terminato:', error) : await addLog('Inserimento eredi terminato:', error);
+
+  console.log('son passato di qua');
+
+  res.send({
+    "result": result,
+    "errorMessage": error
+  });
 });
 
 // --- FUNCTIONS ---
@@ -207,7 +262,8 @@ async function deploySSI() {
   // }
 
   //it builds the did resolver object to interface with the contract
-  didResolver = new DidResolver(web3, ssiContract.instance, 650000);
+  didResolver = new DidResolver(web3, CHIDTRDIDSSI.abi, ssiAddress, ssiContract.instance, 650000);
+  // didResolver = new DidResolver(web3, ssiContract.instance, 650000);
 
   console.log('CITDS param address: ', ssiAddress); //TEST
   console.log('DidResolver object succesfully created!'); //TEST

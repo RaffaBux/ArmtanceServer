@@ -225,7 +225,6 @@ export class DidResolver {
     }
 
     public async removeTrustCertification(
-        did: string,
         senderAuthenticationMethod: string,
         senderAccount: string,
         gasLimit?: number

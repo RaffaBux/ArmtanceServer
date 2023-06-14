@@ -48,7 +48,7 @@ export class ProofVerificationMethodUtils {
                     errorMessage = `The DID method 'did:${dividedDid[1]} is not supported`;
                     break;
                 default:
-                    errorMessage = `Unable to dereference the DID URL '${didUrl}`;
+                    errorMessage = `Unable to dereference the DID URL '${didUrl}: ${dereferencingResult.dereferencingMetadata.errorMessage}`;
             }
             throw new errorConstructor(errorMessage);
         }

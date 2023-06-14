@@ -402,7 +402,6 @@ async function testLibrary(): Promise<void> {
     await printDidDocument(issuer2Did.did, resolver, serviceManager, "Issuer 2 after revocation");
 
     await resolver.removeTrustCertification(
-        issuer2Did.did,
         `${issuer2Did.did}#auth-key-1`,
         issuer2Did.address
     );

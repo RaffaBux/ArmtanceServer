@@ -205,7 +205,7 @@ export class VerifiableCredentialManager<
         const issuerChainResult = await this.didResolver.resolveChain(issuer);
         if (DidUtils.isChainResolutionErrored(issuerChainResult)) {
             throw new InvalidVerifiableCredentialError(
-                `Cannot retrieve the chain of trust of the DID ${issuer}: ${issuerChainResult.resolutionMetadata.errorMessage}`
+                `Cannot retrieve the chain of trust of the DID '${issuer}: ${issuerChainResult.resolutionMetadata.errorMessage}`
             );
         }
 
