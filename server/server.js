@@ -27,7 +27,6 @@ const app = Express();
 // --- ADDRESSES ---
 
 const numberOfVCReleasers = 3;
-const numberOfFreeAccounts = 20;
 const numberOfReservedAccounts = 6;
 
 // --- ADDRESSES RESERVATION ID LEGEND ---
@@ -110,11 +109,11 @@ app.post('/isINHDeployed', (req, res) => {
     result = true;
   }
 
-  res.send({"result": result});
+  res.json({ result: result });
 });
 
 app.get('/deployINH', async (req, res) => {
-  var inhAccount = accountList.reserved[inhReservedAccountIndex];
+  var inhAccount = accountList.reserved[inhReservedAccountIndex]; // TEST
   var inhAddress = inhAccount.address;
 
   var newInhPolicy = {...ContractStruct};
@@ -140,15 +139,17 @@ app.get('/deployINH', async (req, res) => {
   console.log('INH param address: ', inhAddress); //TEST
   console.log('Inheritance contract deployed at: ', newInhPolicy.instance.options.address);  //TEST
 
-  await addLog('New Inheritance policy address: ' + inhAddress, null);
-  await addLog('New Inheritance policy contract deployed at: ' + newInhPolicy.instance.options.address, null);
-  await addLog('New Inheritance policy correctly initialized: ', newInhPolicy);
+  addLog('New Inheritance policy address: ' + inhAddress, null);
+  addLog('New Inheritance policy contract deployed at: ' + newInhPolicy.instance.options.address, null);
+  addLog('New Inheritance policy correctly initialized: ', newInhPolicy);
+
+  res.status(200).json({ success: true });
 });
 
-app.post('/saveHeirs', (req, res) => {
+app.post('/saveHeirs', async (req, res) => {
   var policyId = req.body.policyIdentifier;
   var heirList = req.body.heirList;
-  var sender = req.body.sender;
+  var senderAddress = req.body.sender.addressData[0].address;
 
   //TEST
   for(let i = 0; i < heirList.length; i++) {
@@ -159,43 +160,62 @@ app.post('/saveHeirs', (req, res) => {
     });
   }
 
-  var result = false;
+  var result = true;
   var error = 'Nessun errore vai tra'; //TEST
+  var errorCode = 200;
 
-  var policyFilter = inheritancePolicyList.filter((policy) => (policy.id === policyId && policy.active === true))
+  var policyFilter = inheritancePolicyList.filter((policy) => (policy.id === policyId && policy.active === true));
+  var contractIssuer = await policyFilter[policyId].instance.methods.getIssuer().call();
+  var contractIssuerAddress = contractIssuer[0].toLowerCase();
 
-  if(sender.address !== accountList.reserved[ownerReservedAccountIndex].address) {
-    error = 'ERRORE: Chi sta impostando gli eredi non è il proprietario della polizza d`eredità!';
-  } else if(policyFilter.length !== 1) {
+  console.log('CCCCC');
+
+  if(policyFilter.length !== 1) {
     error = 'ERRORE: Esistono più polizze d`eredita attive con lo stesso identificativo! SUS!';
-  } 
-  // else {
-  //   heirList.forEach(async (heirToBeSaved) => {
-  //     var addingResult = await policyFilter[0].instance.methods.saveHeir(heirToBeSaved).send({ from: sender.address });
+    errorCode = 500;
+  } else if(senderAddress !== contractIssuerAddress) {
+    error = 'ERRORE: Chi sta impostando gli eredi non è il proprietario della polizza d`eredità!';
+    errorCode = 401;
+  } else {
+    heirList.forEach(async (heir) => {
+      var addressList = [];
+      var addressIdList = [];
+      var percentageList = [];
 
-  //     if(addingResult) {
-  //       addingResultMessage = 'Erede ' + heirToBeSaved.did + ' correttamente salvato nel contratto.';
-  //       result = true;
-  //     } else {
-  //       error = 'ERRORE inserimento: ' + heirToBeSaved.did;  
-  //       console.log(error);
-  //     }
-  //   });
-  // }
+      heir.addressData.forEach((account) => {
+        addressList.push(account.address);
+        addressIdList.push(account.address);  // TO DO: da aggiungere e gestire #identifier
+        percentageList.push(account.amount);  // TO DO: da cambiare con % (anche su client)
+      })
 
-  // result? await addLog('Inserimento eredi terminato:', error) : await addLog('Inserimento eredi terminato:', error);
 
-  console.log('son passato di qua');
+      var outcome = await policyFilter[policyId].instance.methods
+        .setHeir(heir.did, heir.delegated, addressList, addressIdList, percentageList, true)
+        .send({ 
+          from: senderAddress,
+          gas: 300000
+        });
 
-  res.send({
-    "result": result,
-    "errorMessage": error
-  });
+      if(!outcome) {
+        error = 'ERRORE inserimento erede: ' + heir.did;
+        errorCode = 500;
+      }
+    });
+  }
+
+  console.log('FFFFFFF');
+
+  var responseObj = {
+    success: result,
+    errorMessage: error
+  };
+  
+  res.status(errorCode).json(responseObj);
 });
 
 // --- FUNCTIONS ---
 
-async function addLog(message, content) {
+function addLog(message, content) {
   var newLog = {...LogStruct};
   newLog.message = message;
   newLog.content = content;
@@ -227,7 +247,7 @@ async function getDefaultAccounts() {
     }
   }
 
-  await addLog('The following account list has been correctly created: ', accountList);
+  addLog('The following account list has been correctly created: ', accountList);
 }
 
 async function deploySSI() {
@@ -249,7 +269,6 @@ async function deploySSI() {
 
   // ADB library right now accepts just the contract abi and address. this way aint working on my machines
   // so once compiled typescript files replace DidResolver.js from line 29 to 40 with the following:
-
   // web3;
   // contract;
   // gasLimit;
@@ -269,8 +288,8 @@ async function deploySSI() {
   console.log('CITDS param address: ', ssiAddress); //TEST
   console.log('DidResolver object succesfully created!'); //TEST
 
-  await addLog('ChainIdTrustDidSsi address: ' + ssiAddress, null);
-  await addLog('DidResolver object succesfully created: ', didResolver);
+  addLog('ChainIdTrustDidSsi address: ' + ssiAddress, null);
+  addLog('DidResolver object succesfully created: ', didResolver);
 }
 
 function setDefaultTestChain() {
@@ -346,7 +365,7 @@ async function getVerifiableCredential(parent, child) {
 
 app.listen(port, async () => {
   console.log('Armtance server is listening on port: ' + port); //TEST
-  await addLog('Armtance server is listening on port: ' + port, null);
+  addLog('Armtance server is listening on port: ' + port, null);
 
   console.log(0);  //TEST
 

@@ -36,6 +36,10 @@ contract Inheritance {
 		heirCounter = 0;
 	}
 
+	function getIssuer() public view returns (Issuer memory){
+		return inheritanceOwner;
+	}
+
 	// validità dei dati passati controllata fuori contratto
 	// _heirDid + _accountIdentifierList[i] → _addressList[i]
 	function setHeir(
