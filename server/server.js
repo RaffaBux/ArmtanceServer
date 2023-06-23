@@ -43,7 +43,7 @@ const vcReleaserReservedAccountIndex = 3;
 
 // --- GANACHE NETWORK ---
 
-const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:7545'));
+const web3 = new Web3(new Web3.providers.HttpProvider('http://127.0.0.1:7545'));
 
 // --- CONTRACT ---
 
@@ -240,14 +240,16 @@ async function deploySSI() {
     arguments: []
   }).send({
     from: ssiAddress,
-    gas: 5000000,
+    gas: 6000000,
     gasPrice: '3000000000'
   });
 
   accountList.reserved[ssiReservedAccountIndex].active = true;
 
 
-  // DidResolver.js:29
+  // ADB library right now accepts just the contract abi and address. this way aint working on my machines
+  // so once compiled typescript files replace DidResolver.js from line 29 to 40 with the following:
+
   // web3;
   // contract;
   // gasLimit;
@@ -262,8 +264,7 @@ async function deploySSI() {
   // }
 
   //it builds the did resolver object to interface with the contract
-  didResolver = new DidResolver(web3, CHIDTRDIDSSI.abi, ssiAddress, ssiContract.instance, 650000);
-  // didResolver = new DidResolver(web3, ssiContract.instance, 650000);
+  didResolver = new DidResolver(web3, ssiContract.instance, 650000);
 
   console.log('CITDS param address: ', ssiAddress); //TEST
   console.log('DidResolver object succesfully created!'); //TEST
