@@ -15,7 +15,6 @@ struct Heir {
 	bool active;
 }
 
-// atm ogni account con amount != 0 è attivo
 struct Account {
 	string accountId;	// #identifier
 	address payable accountAddress;	// 0x0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ
@@ -68,6 +67,49 @@ contract Inheritance {
 		}
 
 		return true;
+	}
+
+	function verifyVC(uint ownerBalance) public returns (bool) {
+		// requires the issuer be from the trust chain
+		// requires the owner to be dead
+		bool results = false;
+
+		require(msg.sender == inheritanceOwner.issuerAddress, 'The caller is not the inheritance owner!');
+
+		splitInheritance(ownerBalance);
+
+		results = true;
+		return results;
+	}
+
+	function splitInheritance(uint ownerBalance) private returns (bool result) {
+		Heir storage thisHeir;
+		Account storage thisAccount;
+		uint accountPercentage;
+		uint initialOwnerBalance = ownerBalance;
+		uint amount;
+
+		result = false;
+
+		// receiverAddress.send(amount) // from msg.sender address
+		
+		for(uint i = 0; i < heirCounter; i++) {
+			thisHeir = heirMap[i];
+			if(thisHeir.active == true) {
+				for(uint j = 0; j < thisHeir.addressCounter; j++) {
+					thisAccount = thisHeir.wallet[j];
+					if(thisAccount.active == true) {
+						accountPercentage = thisAccount.percentage;
+						amount = initialOwnerBalance * accountPercentage / 100;
+
+						thisAccount.accountAddress.transfer(amount);
+					}
+				}
+			}
+		}
+
+		result = true;
+		return result;
 	}
 	
 }

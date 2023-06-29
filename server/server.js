@@ -1,6 +1,8 @@
 // --- LIBRARIES ---
 
+import Cors from 'cors';
 import Web3 from 'web3';
+import FileSystem from 'fs';
 import Express from 'express';
 import BodyParser from 'body-parser';
 import { DidResolver } from '../adb-library/library/build/src/resolver/DidResolver.js';
@@ -73,10 +75,12 @@ app.use(function(req, res, next) {
 
 app.use(BodyParser.urlencoded({extended: true}));
 app.use(BodyParser.json());
+app.use(Cors());
+app.options('*', Cors());
 
-// --- GETS ---
+// --- POSTS ---
 
-app.get('/getAccounts', (req, res) => {
+app.post('/getAccounts', (req, res) => {
   var accountDidObj;
   
   accountList.free.forEach(async (freeAccount, index) => {
@@ -88,13 +92,47 @@ app.get('/getAccounts', (req, res) => {
   res.send(accountList.free);
 });
 
-app.get('/getOwner', (req, res) => {
+app.post('/getOwner', (req, res) => {
   accountList.reserved[ownerReservedAccountIndex].active = true;
 
   res.send(accountList.reserved[ownerReservedAccountIndex]);
 });
 
-app.get('/logs', (req, res) => {
+// DEVELOPMENT ONLY
+app.post('/getExampleVC', async (req, res) => {
+  var vcExamplesArray=[];
+  var verifiableCredential;
+  
+  var additionalTypes = ['CertificationCredential', 
+    // 'DeathCertificate'
+  ];
+
+  verifiableCredential = await getVerifiableCredential(
+    additionalTypes,
+    accountList.reserved[4], 
+    accountList.reserved[ownerReservedAccountIndex]
+  );
+
+  vcExamplesArray.push(verifiableCredential);
+
+  verifiableCredential = await getVerifiableCredential(
+    additionalTypes,
+    accountList.reserved[5], 
+    accountList.reserved[ownerReservedAccountIndex]
+  );
+
+  vcExamplesArray.push(verifiableCredential);
+
+  vcExamplesArray.forEach((exampleVC, index) => {
+    FileSystem.writeFile('../Armtance/src/test/' + index + '_verifiableCredential.json', JSON.stringify(exampleVC), (error) => {
+      if(error) { console.log(error); }
+    });
+  });
+
+  res.status(200).json({ success: true });
+});
+
+app.post('/logs', (req, res) => {
   res.send(logs);
 });
 
@@ -112,7 +150,7 @@ app.post('/isINHDeployed', (req, res) => {
   res.json({ result: result });
 });
 
-app.get('/deployINH', async (req, res) => {
+app.post('/deployINH', async (req, res) => {
   var inhAccount = accountList.reserved[inhReservedAccountIndex]; // TEST
   var inhAddress = inhAccount.address;
 
@@ -136,8 +174,8 @@ app.get('/deployINH', async (req, res) => {
 
   accountList.reserved[inhReservedAccountIndex].active = true;
 
-  console.log('INH param address: ', inhAddress); //TEST
-  console.log('Inheritance contract deployed at: ', newInhPolicy.instance.options.address);  //TEST
+  console.log('INH param address: ', inhAddress); // TEST
+  console.log('Inheritance contract deployed at: ', newInhPolicy.instance.options.address);  // TEST
 
   addLog('New Inheritance policy address: ' + inhAddress, null);
   addLog('New Inheritance policy contract deployed at: ' + newInhPolicy.instance.options.address, null);
@@ -161,14 +199,12 @@ app.post('/saveHeirs', async (req, res) => {
   }
 
   var result = true;
-  var error = 'Nessun errore vai tra'; //TEST
+  var error = 'Nessun errore vai tra'; // TEST
   var errorCode = 200;
 
   var policyFilter = inheritancePolicyList.filter((policy) => (policy.id === policyId && policy.active === true));
   var contractIssuer = await policyFilter[policyId].instance.methods.getIssuer().call();
   var contractIssuerAddress = contractIssuer[0].toLowerCase();
-
-  console.log('CCCCC');
 
   if(policyFilter.length !== 1) {
     error = 'ERRORE: Esistono più polizze d`eredita attive con lo stesso identificativo! SUS!';
@@ -203,7 +239,48 @@ app.post('/saveHeirs', async (req, res) => {
     });
   }
 
-  console.log('FFFFFFF');
+  var responseObj = {
+    success: result,
+    errorMessage: error
+  };
+  
+  res.status(errorCode).json(responseObj);
+});
+
+app.post('/verifyVC', async (req, res) => {
+  var policyId = req.body.policyIdentifier;
+  var givenVC = req.body.verifiableCredential;
+
+  var result = true;
+  var error = 'Nessun errore vai tra'; // TEST
+  var errorCode = 200;
+
+  var policyFilter = inheritancePolicyList.filter((policy) => (policy.id === policyId && policy.active === true));
+  var contractIssuer = await policyFilter[policyId].instance.methods.getIssuer().call();
+  var contractIssuerAddress = contractIssuer[0].toLowerCase();
+
+  if(policyFilter.length !== 1) {
+    error = 'ERRORE: Esistono più polizze d`eredita attive con lo stesso identificativo! SUS!';
+    errorCode = 500;
+  } else if(senderAddress !== contractIssuerAddress) {
+    error = 'ERRORE: Chi sta impostando gli eredi non è il proprietario della polizza d`eredità!';
+    errorCode = 401;
+  } else {
+    var verified = policyFilter[policyId].instance.methods.verifyVC(givenVC).send({ 
+      from: contractIssuerAddress,
+      gas: 300000
+    });
+
+    if(verified) {
+      policyFilter[policyId].instance.methods.splitInheritance().send({ 
+        from: contractIssuerAddress,
+        gas: 300000
+      });
+    } else {
+      error = 'ERRORE: La verifiable credential fornita non è valida!';
+      errorCode = 401;
+    }
+  }
 
   var responseObj = {
     success: result,
@@ -266,30 +343,32 @@ async function deploySSI() {
 
   accountList.reserved[ssiReservedAccountIndex].active = true;
 
-
-  // ADB library right now accepts just the contract abi and address. this way aint working on my machines
-  // so once compiled typescript files replace DidResolver.js from line 29 to 40 with the following:
-  // web3;
-  // contract;
-  // gasLimit;
-  // trustCredentialManager;
-  // chainId;
-  // constructor(web3, instance, gasLimit) {
-  //   this.web3 = web3;
-  //   this.contract = instance.methods;
-  //   this.gasLimit = gasLimit;
-  //   this.trustCredentialManager = new VerifiableCredentialManager_1.VerifiableCredentialManager(this.web3, this, new EcdsaSecp256k1ProofManager_1.EcdsaSecp256k1ProofManager(this.web3, this));
-  //   this.chainId = 0;
-  // }
-
   //it builds the did resolver object to interface with the contract
   didResolver = new DidResolver(web3, ssiContract.instance, 650000);
+
+  await setDefaultAccounts();
 
   console.log('CITDS param address: ', ssiAddress); //TEST
   console.log('DidResolver object succesfully created!'); //TEST
 
   addLog('ChainIdTrustDidSsi address: ' + ssiAddress, null);
   addLog('DidResolver object succesfully created: ', didResolver);
+}
+
+async function setDefaultAccounts() {
+  var accountDidObj;
+  
+  accountList.reserved.forEach(async (reservedAccount) => {
+    accountDidObj = await didResolver.createNewDidFromAccount(reservedAccount);
+    reservedAccount.did = accountDidObj.did;
+    reservedAccount.bufferedPrivateKey = accountDidObj.privateKey;
+  });
+
+  accountList.free.forEach(async (reservedAccount) => {
+    accountDidObj = await didResolver.createNewDidFromAccount(reservedAccount);
+    reservedAccount.did = accountDidObj.did;
+    reservedAccount.bufferedPrivateKey = accountDidObj.privateKey;
+  });
 }
 
 function setDefaultTestChain() {
@@ -306,18 +385,22 @@ async function buildChain(currentBlockIndex) {
   var accountDidObj;
   var verifiableCredential;
 
-  if(accountList.reserved[currentBlockIndex - 1].did === null || accountList.reserved[i].bufferedPrivateKey === null || accountList.reserved[i] === false) {
-    accountDidObj = await didResolver.createNewDidFromAccount(accountList.reserved[currentBlockIndex - 1]);
-    accountList.reserved[currentBlockIndex - 1].did = accountDidObj.did;
-    accountList.reserved[currentBlockIndex - 1].bufferedPrivateKey = accountDidObj.privateKey;
+  if(accountList.reserved[currentBlockIndex - 1].did !== null && accountList.reserved[currentBlockIndex - 1].bufferedPrivateKey !== null) {
     accountList.reserved[currentBlockIndex - 1].active = true;
+    console.log('-----\n debug\n -----')
   }
   
   accountDidObj = await didResolver.createNewDidFromAccount(accountList.reserved[currentBlockIndex]);
   accountList.reserved[currentBlockIndex].did = accountDidObj.did;
   accountList.reserved[currentBlockIndex].bufferedPrivateKey = accountDidObj.privateKey;
 
-  verifiableCredential = await getVerifiableCredential(accountList.reserved[currentBlockIndex - 1], accountList.reserved[currentBlockIndex]);
+  var additionalTypes = ['CertificationCredential'];
+  verifiableCredential = await getVerifiableCredential(
+    additionalTypes,
+    accountList.reserved[currentBlockIndex - 1], 
+    accountList.reserved[currentBlockIndex]
+  );
+  accountList.reserved[currentBlockIndex].verifiableCredential = verifiableCredential;
 
   const trustedIssuers = new Set();
   trustedIssuers.add(accountList.reserved[currentBlockIndex - 1].did);
@@ -332,19 +415,19 @@ async function setVerificationEnviroment() {
   verifiableCredentialManager = new VerifiableCredentialManager(web3, didResolver, ecdsaSecp256k1CreationOptions);
 }
 
-async function getVerifiableCredential(parent, child) {
+async function getVerifiableCredential(addTypes, parent, child) {
   return verifiableCredentialManager.createVerifiableCredential({
     additionalContexts: [
       'https://identity.foundation/EcdsaSecp256k1RecoverySignature2020/lds-ecdsa-secp256k1-recovery2020-2.0.jsonld',
       'https://www.ssicot.com/certification-credential',
       'https://www.ssicot.com/RevocationList2023'
     ],
-    additionalTypes: ['CertificationCredential'],
+    additionalTypes: addTypes,
     credentialSubject: {
       id: child.did
     },
     issuer: parent.did,
-    expirationDate: new Date('2024-01-01T19:24:24Z'),
+    expirationDate: new Date('2025-01-01T19:24:24Z'),
     credentialStatus: {
       id: `${parent.did}#revoc-1`,
       type: "RevocationList2023"
